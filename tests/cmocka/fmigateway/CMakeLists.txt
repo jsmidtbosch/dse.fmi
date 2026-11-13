@@ -36,7 +36,7 @@ target_compile_definitions(fmigateway_runtime
 target_link_libraries(fmigateway_runtime
     PRIVATE
         cmocka
-        xml
+        dse_external_xml2
 )
 
 file(GLOB PDUNET_SOURCES CONFIGURE_DEPENDS "${DSE_MODELC_SOURCE_DIR}/model/pdunet/*.c")
@@ -67,8 +67,10 @@ add_library(modelcgateway_runtime OBJECT
     ${DSE_MODELC_SOURCE_DIR}/controller/modelc_args.c
     ${DSE_MODELC_SOURCE_DIR}/controller/step.c
     ${DSE_MODELC_SOURCE_DIR}/controller/model_runtime.c
-    ${DSE_MODELC_SOURCE_DIR}/adapter/adapter_loopb.c
+    ${DSE_MODELC_SOURCE_DIR}/controller/transform.c
+    ${DSE_MODELC_SOURCE_DIR}/adapter/uid_index.c
     ${DSE_MODELC_SOURCE_DIR}/adapter/index.c
+    ${DSE_MODELC_SOURCE_DIR}/adapter/uid_index.c
 )
 target_include_directories(modelcgateway_runtime
     PUBLIC
@@ -76,9 +78,6 @@ target_include_directories(modelcgateway_runtime
         ${DSE_MODELC_INCLUDE_DIR}
         ${DSE_CLIB_INCLUDE_DIR}
         ${DSE_NCODEC_INCLUDE_DIR}
-        ${LUA_SOURCE_DIR}
-        ${MSGPACKC_SOURCE_DIR}/include
-        ${YAML_SOURCE_DIR}/include
 )
 target_compile_definitions(modelcgateway_runtime
     PUBLIC
@@ -90,12 +89,12 @@ target_compile_definitions(modelcgateway_runtime
 )
 target_link_libraries(modelcgateway_runtime
     PUBLIC
-        lua
+        dse_external_lua
         m
     PRIVATE
         cmocka
-        yaml
-        dl
+        dse_external_yaml
+        dse_external_dl
 )
 
 
