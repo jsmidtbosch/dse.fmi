@@ -39,10 +39,31 @@ void default_log(fmi3InstanceEnvironment instanceEnvironment, fmi3Status status,
 }
 
 
+#define LOG_CATEGORIES_ALL                                                     \
+    (FmiLogCategory_Trace | FmiLogCategory_Debug | FmiLogCategory_Info |       \
+        FmiLogCategory_Error | FmiLogCategory_Fatal | FmiLogCategory_All)
+
+
+/* Returns 0 for categories not in the map (FMU specific categories). */
+static uint16_t _log_category_flag(const char* name)
+{
+    if (name == NULL) return 0;
+    for (size_t i = 0; i < FMI_LOG_CATEGORY_MAP_LEN; i++) {
+        if (strcmp(_fmi_log_category_map[i].name, name) == 0) {
+            return (uint16_t)_fmi_log_category_map[i].flag;
+        }
+    }
+    return 0;
+}
+
+
 void fmu_log(FmuInstanceData* fmu, const int status, const char* category,
     const char* message, ...)
 {
     if (fmu->instance.log_enabled == fmi3False) return;
+
+    uint16_t flag = _log_category_flag(category);
+    if (flag && (fmu->instance.log_categories & flag) == 0) return;
 
     va_list args;
     va_start(args, message);
@@ -59,6 +80,7 @@ static void _log_binary_signal(
     FmuInstanceData* fmu, FmuSignalVectorIndex* idx, const char* op)
 {
     if (idx == NULL || idx->sv->binary == NULL) return;
+    if ((fmu->instance.log_categories & FmiLogCategory_Trace) == 0) return;
     uint32_t index = idx->vi;
 
     fmu_log(fmu, fmi3OK, "Trace",
@@ -91,9 +113,21 @@ fmi3Status fmi3SetDebugLogging(fmi3Instance instance, fmi3Boolean loggingOn,
     size_t nCategories, const fmi3String categories[])
 {
     assert(instance);
-    UNUSED(loggingOn);
-    UNUSED(nCategories);
-    UNUSED(categories);
+    FmuInstanceData* fmu = (FmuInstanceData*)instance;
+
+    /* No categories means that loggingOn applies to all categories. */
+    uint16_t mask = (nCategories == 0) ? LOG_CATEGORIES_ALL : 0;
+    for (size_t i = 0; i < nCategories; i++) {
+        uint16_t flag = _log_category_flag(categories[i]);
+        mask |= (flag == FmiLogCategory_All) ? LOG_CATEGORIES_ALL : flag;
+    }
+
+    if (loggingOn) {
+        fmu->instance.log_categories |= mask;
+    } else {
+        fmu->instance.log_categories &= (uint16_t)~mask;
+    }
+    fmu->instance.log_enabled = (fmu->instance.log_categories != 0);
 
     return fmi3OK;
 }
@@ -138,6 +172,7 @@ fmi3Instance fmi3InstantiateCoSimulation(fmi3String instanceName,
     fmu->instance.resource_location = strdup(resourcePath);
     fmu->instance.guid = strdup(instantiationToken);
     fmu->instance.log_enabled = loggingOn;
+    fmu->instance.log_categories = loggingOn ? LOG_CATEGORIES_ALL : 0;
     fmu->instance.event_mode_used = eventModeUsed;
     fmu->instance.version = 3;
     fmu->instance.environment = instanceEnvironment;
@@ -538,7 +573,7 @@ fmi3Status fmi3GetBinary(fmi3Instance instance,
         if (data == NULL || data_len == 0) continue;
 
         /* Write the requested string, encode if configured. */
-        // _log_binary_signal(fmu, idx, "GetBinary"); # temporarily disabled
+        _log_binary_signal(fmu, idx, "GetBinary");
         EncodeFunc ef = fmu_variable_find(
             &fmu->variables.binary.encode_func, valueReferences[i]);
         if (ef) {

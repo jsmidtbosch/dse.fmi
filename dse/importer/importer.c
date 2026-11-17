@@ -51,6 +51,7 @@ typedef void (*fmi2FreeInstance)();
 
 /* Define types for the FMI 3 inteface methods being used. */
 typedef void* (*fmi3InstantiateCoSimulation)();
+typedef int32_t (*fmi3SetDebugLogging)();
 typedef int32_t (*fmi3EnterInitializationMode)();
 typedef int32_t (*fmi3ExitInitializationMode)();
 typedef int32_t (*fmi3GetFloat64)();
