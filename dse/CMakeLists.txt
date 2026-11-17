@@ -161,7 +161,7 @@ target_link_libraries(fmi3-common
     PRIVATE
         dse_external_xml2
         $<$<BOOL:${WIN32}>:bcrypt>
-        $<$<BOOL:${WIN32}>:dl>
+        $<$<BOOL:${WIN32}>:dse_external_dl>
         m
 )
 

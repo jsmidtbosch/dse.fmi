@@ -36,7 +36,7 @@ target_link_libraries(fmu3${MODULE_LC}
         ab-codec
         dse_external_xml2
         $<$<BOOL:${WIN32}>:bcrypt>
-        $<$<BOOL:${WIN32}>:dl>
+        $<$<BOOL:${WIN32}>:dse_external_dl>
         m
 )
 set_target_properties(fmu3${MODULE_LC}
