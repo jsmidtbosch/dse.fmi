@@ -538,7 +538,7 @@ fmi3Status fmi3GetBinary(fmi3Instance instance,
         if (data == NULL || data_len == 0) continue;
 
         /* Write the requested string, encode if configured. */
-        _log_binary_signal(fmu, idx, "GetBinary");
+        // _log_binary_signal(fmu, idx, "GetBinary"); # temporarily disabled
         EncodeFunc ef = fmu_variable_find(
             &fmu->variables.binary.encode_func, valueReferences[i]);
         if (ef) {
