@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "fmigateway.h"
+#include <dse/fmigateway/fmigateway.h>
 
 bool fmigateway_lsbus_enabled(SignalVector* sv, uint32_t index)
 {

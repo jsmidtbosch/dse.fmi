@@ -5,7 +5,7 @@
 
 ################
 ## DSE Projects.
-export PACKAGE_ARCH ?= windows-x64
+export PACKAGE_ARCH ?= linux-amd64
 
 DSE_CLIB_REPO ?= https://github.com/boschglobal/dse.clib
 DSE_CLIB_VERSION ?= 1.1.6
