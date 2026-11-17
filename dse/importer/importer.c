@@ -405,8 +405,12 @@ static int _run_fmu3_cosim(modelDescription* desc, void* handle,
     fmi3InstantiateCoSimulation instantiate =
         dlsym(handle, "fmi3InstantiateCoSimulation");
     if (instantiate == NULL) return EINVAL;
-    fmu = instantiate("fmu", "guid", "resources", false, true, false, false,
-        NULL, 0, NULL, &_fmu3_log, NULL);
+    bool event_mode = desc->lsbus.count && desc->has_event_mode;
+    if (desc->lsbus.count && !event_mode) {
+        _log("LS-BUS Bus Terminals ignored (hasEventMode is not true)");
+    }
+    fmu = instantiate("fmu", "guid", "resources", false, true, event_mode,
+        false, NULL, 0, NULL, &_fmu3_log, NULL);
     if (fmu == NULL) return EINVAL;
 
     /* Load Get and Set functions. */
@@ -444,6 +448,13 @@ static int _run_fmu3_cosim(modelDescription* desc, void* handle,
         dlsym(handle, "fmi3ExitInitializationMode");
     if (exit_init_mode == NULL) return EINVAL;
     exit_init_mode(fmu);
+
+    /* FMI-LS-BUS: Event Mode after Initialization Mode (eventModeUsed). */
+    LsBusFmi lsbus = { 0 };
+    if (event_mode) {
+        if (lsbus_load(&lsbus, handle, fmu)) return EINVAL;
+        _log("LS-BUS Bus Terminals: %zu", desc->lsbus.count);
+    }
 
     if (__verbose__) {
         unsigned int* vr;
@@ -530,11 +541,22 @@ static int _run_fmu3_cosim(modelDescription* desc, void* handle,
         set_float64(fmu, desc->real.vr_rx_real, desc->real.rx_count,
             desc->real.val_rx_real, desc->real.rx_count);
 
+        /* FMI-LS-BUS Bus Communication Point (Tx_Clock interval = step). */
+        if (event_mode) {
+            if (lsbus_event_mode(desc, &lsbus, step, step > 0)) {
+                _log("LS-BUS Event Mode returned an error");
+            }
+        }
+
         if (__verbose__) {
             _log("Calling fmi3DoStep(): model_time=%f, step_size=%f",
                 model_time, step_size);
         }
-        int rc = do_step(fmu, model_time, step_size);
+        bool   event_handling_needed, terminate_simulation, early_return;
+        double last_successful_time;
+        int    rc =
+            do_step(fmu, model_time, step_size, true, &event_handling_needed,
+                &terminate_simulation, &early_return, &last_successful_time);
         if (rc != 0) {
             _log("step() returned error code: %d", rc);
         }
@@ -546,10 +568,13 @@ static int _run_fmu3_cosim(modelDescription* desc, void* handle,
             desc->binary.val_size_tx_binary, desc->binary.val_tx_binary,
             desc->binary.tx_count);
         for (size_t i = 0; i < desc->binary.tx_count; i++) {
-            /* Duplicate received strings (in-case FMU releases). */
+            /* Copy (FMU may release), binary values are not terminated. */
             if (desc->binary.val_tx_binary[i]) {
-                desc->binary.val_tx_binary[i] =
-                    strdup(desc->binary.val_tx_binary[i]);
+                size_t len = desc->binary.val_size_tx_binary[i];
+                char*  copy = malloc(len + 1);
+                memcpy(copy, desc->binary.val_tx_binary[i], len);
+                copy[len] = '\0';
+                desc->binary.val_tx_binary[i] = copy;
             }
         }
 
@@ -764,6 +789,7 @@ int main(int argc, char** argv)
     free(desc->real.val_tx_real);
     free(desc->real.vr_rx_real);
     free(desc->real.val_rx_real);
+    lsbus_free(desc);
     free(desc);
 
     dlclose(handle);

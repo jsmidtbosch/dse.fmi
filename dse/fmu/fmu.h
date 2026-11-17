@@ -199,6 +199,8 @@ typedef struct FmuSignalVTable {
     FmuSignalsResetFunc  reset;
     FmuSignalsSetupFunc  setup;
     FmuSignalsRemoveFunc remove;
+    /* Optional, when set `reset` only resets Rx and this resets Tx. */
+    FmuSignalsResetFunc  reset_tx;
 } FmuSignalVTable;
 
 
@@ -249,6 +251,13 @@ typedef struct FmuVariable {
 } FmuVariable;
 
 
+/* Time-based Clock (FMI 3), from intervalDecimal/shiftDecimal. */
+typedef struct FmuClock {
+    double interval;
+    double shift;
+} FmuClock;
+
+
 static __inline__ int fmu_variable_compar(const void* left, const void* right)
 {
     uint32_t l = ((const FmuVariable*)left)->vr;
@@ -294,6 +303,7 @@ typedef struct FmuInstanceData {
         char*    resource_location;
         char*    guid;
         bool     log_enabled;
+        bool     event_mode_used; /* FMI 3 */
         void*    logger;
         void*    environment;
         /* Storage for memory to be explicitly released. */
@@ -320,6 +330,7 @@ typedef struct FmuInstanceData {
             /* Lazy free list for allocated strings. */
             Vector free_list;  // Vector[void*], owns items
         } binary;
+        Vector          clock;  // Vector[FmuVariable{ref:FmuClock*}], owns ref
         /* Variable storage, via Signal Vectors. */
         FmuSignalVTable vtable;
         /* Indicate if (binary) signals have been reset. */
@@ -349,6 +360,10 @@ typedef struct FmuInstanceData {
 /* ascii85.c */
 DLL_PRIVATE char* dse_ascii85_encode(const char* source, size_t len);
 DLL_PRIVATE char* dse_ascii85_decode(const char* source, size_t* len);
+
+/* stream.c (NCodec stream on a binary signal) */
+DLL_PRIVATE void* fmu_sv_stream_create(FmuSignalVector* sv, uint32_t idx);
+DLL_PRIVATE void  fmu_sv_stream_destroy(void* stream);
 
 /* signal.c (default implementations for generic FMU) */
 DLL_PUBLIC void    fmu_load_signal_handlers(FmuInstanceData* fmu);

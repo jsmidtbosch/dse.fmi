@@ -1,0 +1,53 @@
+env NAME=fmigateway_lsbus
+
+# Operate from the WORKDIR (allocated by caller, i.e. docker command).
+cd $WORKDIR
+env SIM=sim
+
+env EXAMPLE=$REPODIR/dse/build/_out/examples/gateway
+env FMU_IMPORTER=$REPODIR/dse/build/_out/importer/fmuImporter
+
+
+# Create the simulation folder.
+mkdir $SIM/bin
+cp $FMU_IMPORTER $SIM/bin/fmuImporter
+
+exec cp -R $EXAMPLE/fmi3_lsbus $SIM/fmu
+exec cp -R $EXAMPLE/model $SIM/model
+
+# TEST: FMI Gateway (FMI 3) with an FMI-LS-BUS CAN Bus Terminal, operated by
+# the importer in Event Mode (Tx_Clock/Rx_Clock, Tx_Data/Rx_Data).
+exec sh -e $WORK/test.sh
+
+stdout 'Importer: Loading FMU: binaries/x86_64-linux/libfmi3gateway.so'
+stdout 'Importer: LS-BUS Bus Terminals: 1'
+stdout 'LS-BUS: terminals=1'
+stdout 'Encoding: enc=0, dec=0'
+! stdout 'LS-BUS Event Mode returned an error'
+! stdout 'step\(\) returned error'
+! stdout 'dropped'
+
+# Importer -> Rx_Data (CAN FD Transmit) -> Gateway -> SimBus -> Model.
+stdout 'Model: RX\[132\] Hello from Importer \(10\)'
+# Model -> SimBus -> Gateway -> Tx_Data (CAN FD Transmit) -> Importer.
+stdout 'Importer: LS-BUS CAN. Tx_Data: id=1001 len=32'
+stdout 'Importer: LS-BUS CAN. Tx_Data: id=1008 len=32'
+stdout 'Importer: network message \(RX\): Hello World! from node_id=1'
+
+
+-- test.sh --
+SIMER_IMAGE="${SIMER_IMAGE:-ghcr.io/boschglobal/dse-simer:latest}"
+
+docker run --name gateway -i --rm -v $ENTRYWORKDIR/$SIM:/sim \
+    --env SIMBUS_LOGLEVEL=4 \
+    --net="host" \
+    --entrypoint="" $SIMER_IMAGE \
+    bash -c "cd fmu; valgrind -q --leak-check=yes --error-exitcode=808 \
+    ../bin/fmuImporter --verbose" &
+
+docker run --name simer -i --rm -v $ENTRYWORKDIR/$SIM:/sim \
+    --env SIMBUS_LOGLEVEL=4 \
+    --env target_inst:SIMBUS_LOGGER=4 \
+    --net="host" \
+    $SIMER_IMAGE \
+    -stepsize 0.0005 -endtime 0.005

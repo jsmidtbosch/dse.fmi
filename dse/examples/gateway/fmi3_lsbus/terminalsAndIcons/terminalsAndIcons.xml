@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<fmiTerminalsAndIcons fmiVersion="3.0">
+    <Terminals>
+        <Terminal terminalKind="org.fmi-ls-bus.network-terminal" name="CAN"
+            matchingRule="org.fmi-ls-bus.transceiver"
+            description="CAN Bus Terminal (Network Abstraction)">
+            <TerminalMemberVariable variableKind="signal"
+                variableName="CAN.Rx_Clock" memberName="Rx_Clock"/>
+            <TerminalMemberVariable variableKind="signal"
+                variableName="CAN.Rx_Data" memberName="Rx_Data"/>
+            <TerminalMemberVariable variableKind="signal"
+                variableName="CAN.Tx_Clock" memberName="Tx_Clock"/>
+            <TerminalMemberVariable variableKind="signal"
+                variableName="CAN.Tx_Data" memberName="Tx_Data"/>
+        </Terminal>
+    </Terminals>
+</fmiTerminalsAndIcons>

@@ -137,6 +137,11 @@ void test_fmu_default_signals_reset(void** state)
     fmu->variables.vtable.reset(fmu);
 
     assert_int_equal(idx_i->sv->length[idx_i->vi], 0);
+    assert_int_equal(idx_o->sv->length[idx_o->vi], 43);
+
+    fmu->variables.vtable.reset_tx(fmu);
+
+    assert_int_equal(idx_i->sv->length[idx_i->vi], 0);
     assert_int_equal(idx_o->sv->length[idx_o->vi], 0);
 
     fmu->variables.vtable.remove(fmu);

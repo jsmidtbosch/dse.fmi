@@ -10,7 +10,8 @@
 #include <dse/importer/importer.h>
 
 
-#define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
+#define ARRAY_SIZE(x)     (sizeof(x) / sizeof(x[0]))
+#define LSBUS_MIME_PREFIX "application/org.fmi-standard.fmi-ls-bus."
 
 
 /**
@@ -284,7 +285,7 @@ static inline void _parse_fmi3_binary(xmlNodePtr child, xmlChar* vr,
 
     BinaryData* data = calloc(1, sizeof(BinaryData));
 
-    data->start = strdup((char*)start);
+    if (start) data->start = strdup((char*)start);
 
     xmlChar* mime_type = _parse_fmi3_tool_anno(
         child, "dse.standards.fmi-ls-binary-codec", "Mimetype");
@@ -305,9 +306,93 @@ static inline void _parse_fmi3_binary(xmlNodePtr child, xmlChar* vr,
 }
 
 
+static LsBusTerminal* _lsbus_terminal(
+    modelDescription* desc, const char* name, size_t len)
+{
+    for (size_t i = 0; i < desc->lsbus.count; i++) {
+        LsBusTerminal* t = &desc->lsbus.terminal[i];
+        if (strlen(t->name) == len && strncmp(t->name, name, len) == 0) {
+            return t;
+        }
+    }
+    desc->lsbus.terminal = realloc(
+        desc->lsbus.terminal, (desc->lsbus.count + 1) * sizeof(LsBusTerminal));
+    LsBusTerminal* t = &desc->lsbus.terminal[desc->lsbus.count++];
+    /* strndup is not available on MinGW. */
+    char* n = calloc(len + 1, sizeof(char));
+    memcpy(n, name, len);
+    *t = (LsBusTerminal){ .name = n };
+    return t;
+}
+
+
+/* FMI-LS-BUS (Network Abstraction): Binary "<bus>Rx_Data" / "<bus>Tx_Data"
+   with an LS-BUS mimeType, paired by name into Bus Terminals. */
+static bool _parse_fmi3_lsbus(xmlNodePtr node, modelDescription* desc)
+{
+    if (xmlStrcmp(node->name, (xmlChar*)"Binary")) return false;
+    xmlChar* mime_type = xmlGetProp(node, (xmlChar*)"mimeType");
+    if (mime_type == NULL || strncmp((char*)mime_type, LSBUS_MIME_PREFIX,
+                                 strlen(LSBUS_MIME_PREFIX)) != 0) {
+        xmlFree(mime_type);
+        return false;
+    }
+
+    xmlChar*     name = xmlGetProp(node, (xmlChar*)"name");
+    xmlChar*     vr = xmlGetProp(node, (xmlChar*)"valueReference");
+    xmlChar*     clocks = xmlGetProp(node, (xmlChar*)"clocks");
+    const size_t suffix = strlen("Rx_Data");
+    size_t       len = name ? strlen((char*)name) : 0;
+    bool         rx =
+        len >= suffix && strcmp((char*)name + len - suffix, "Rx_Data") == 0;
+    bool tx =
+        len >= suffix && strcmp((char*)name + len - suffix, "Tx_Data") == 0;
+    if ((rx || tx) && vr && clocks) {
+        LsBusTerminal* t = _lsbus_terminal(desc, (char*)name, len - suffix);
+        if (t->mime_type == NULL) t->mime_type = strdup((char*)mime_type);
+        unsigned int v = (unsigned int)strtoul((char*)vr, NULL, 10);
+        unsigned int c = (unsigned int)strtoul((char*)clocks, NULL, 10);
+        if (rx) {
+            t->rx = true;
+            t->rx_vr = v;
+            t->rx_clock_vr = c;
+        } else {
+            t->tx = true;
+            t->tx_vr = v;
+            t->tx_clock_vr = c;
+        }
+    } else {
+        printf("Importer: LS-BUS variable %s ignored (expect clocked "
+               "<bus>Rx_Data or <bus>Tx_Data)\n",
+            name ? (char*)name : "");
+    }
+
+    xmlFree(mime_type);
+    xmlFree(name);
+    xmlFree(vr);
+    xmlFree(clocks);
+    return true;
+}
+
+
+static bool _get_fmi3_has_event_mode(xmlXPathContext* ctx)
+{
+    xmlXPathObject* obj = xmlXPathEvalExpression(
+        (xmlChar*)"/fmiModelDescription/CoSimulation/@hasEventMode", ctx);
+    bool result = false;
+    if (obj && obj->nodesetval && obj->nodesetval->nodeNr) {
+        xmlChar* v = xmlNodeGetContent(obj->nodesetval->nodeTab[0]);
+        result = v && xmlStrcmp(v, (xmlChar*)"true") == 0;
+        xmlFree(v);
+    }
+    xmlXPathFreeObject(obj);
+    return result;
+}
+
+
 static inline void _parse_fmi3_model_desc(HashMap* vr_rx_real,
     HashMap* vr_tx_real, HashMap* vr_rx_binary, HashMap* vr_tx_binary,
-    xmlXPathContext* ctx)
+    modelDescription* desc, xmlXPathContext* ctx)
 {
     xmlXPathObject* xml_sv_obj = xmlXPathEvalExpression(
         (xmlChar*)"/fmiModelDescription/ModelVariables", ctx);
@@ -316,6 +401,7 @@ static inline void _parse_fmi3_model_desc(HashMap* vr_rx_real,
         for (xmlNodePtr child = model_variables->children; child;
             child = child->next) {
             if (child->type != XML_ELEMENT_NODE) continue;
+            if (_parse_fmi3_lsbus(child, desc)) continue;
 
             xmlChar* vr = xmlGetProp(child, (xmlChar*)"valueReference");
             xmlChar* causality = xmlGetProp(child, (xmlChar*)"causality");
@@ -454,8 +540,9 @@ modelDescription* parse_model_desc(const char* docname, const char* platform)
         break;
     case 3:
         _parse_fmi3_model_desc(
-            &vr_rx_real, &vr_tx_real, &vr_rx_binary, &vr_tx_binary, ctx);
+            &vr_rx_real, &vr_tx_real, &vr_rx_binary, &vr_tx_binary, desc, ctx);
         desc->fmu_lib_path = _get_fmu_binary_path(ctx, platform, 3);
+        desc->has_event_mode = _get_fmi3_has_event_mode(ctx);
         break;
     default:
         return NULL;

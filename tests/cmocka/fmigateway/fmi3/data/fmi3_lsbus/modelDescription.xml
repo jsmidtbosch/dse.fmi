@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<fmiModelDescription fmiVersion="3.0" modelName="gateway" instantiationToken="{880ba27a-938d-4e61-9817-2ae18767232a}" description="Gateway with an FMI-LS-BUS CAN Bus Terminal" author="Robert Bosch GmbH" version="0.0.1">
+    <CoSimulation modelIdentifier="libfmi3gateway" hasEventMode="true" canHandleVariableCommunicationStepSize="true"></CoSimulation>
+    <DefaultExperiment startTime="0.000000" stopTime="3600.0" stepSize="0.000500"></DefaultExperiment>
+    <ModelVariables>
+        <!-- FMI-LS-BUS Bus Terminal (dse.standards.fmi-ls-bus.enabled: true). -->
+        <Binary name="CAN.Rx_Data" valueReference="2" causality="input" variability="discrete" clocks="6" mimeType="application/org.fmi-standard.fmi-ls-bus.can; version=&quot;1.0.0&quot;">
+            <Start value=""/>
+        </Binary>
+        <Binary name="CAN.Tx_Data" valueReference="3" causality="output" variability="discrete" clocks="7" initial="calculated" mimeType="application/org.fmi-standard.fmi-ls-bus.can; version=&quot;1.0.0&quot;"/>
+        <!-- NCodec stream (default). -->
+        <Binary name="network_2_1_rx" valueReference="4" causality="input" variability="discrete" mimeType="application/x-automotive-bus; interface=stream; type=frame; bus=can; schema=fbs; bus_id=2; node_id=2; interface_id=0">
+            <Start value=""/>
+        </Binary>
+        <Binary name="network_2_1_tx" valueReference="5" causality="output" variability="discrete" initial="calculated" mimeType="application/x-automotive-bus; interface=stream; type=frame; bus=can; schema=fbs; bus_id=2; node_id=2; interface_id=0"/>
+        <Clock name="CAN.Rx_Clock" valueReference="6" causality="input" variability="discrete" intervalVariability="triggered"/>
+        <Clock name="CAN.Tx_Clock" valueReference="7" causality="input" variability="discrete" intervalVariability="constant" intervalDecimal="0.0005"/>
+        <!-- FMI-LS-BUS Bus Terminal, SimBus PDU based CAN. -->
+        <Binary name="CAN_PDU.Rx_Data" valueReference="8" causality="input" variability="discrete" clocks="10" mimeType="application/org.fmi-standard.fmi-ls-bus.can; version=&quot;1.0.0&quot;">
+            <Start value=""/>
+        </Binary>
+        <Binary name="CAN_PDU.Tx_Data" valueReference="9" causality="output" variability="discrete" clocks="11" initial="calculated" mimeType="application/org.fmi-standard.fmi-ls-bus.can; version=&quot;1.0.0&quot;"/>
+        <Clock name="CAN_PDU.Rx_Clock" valueReference="10" causality="input" variability="discrete" intervalVariability="triggered"/>
+        <Clock name="CAN_PDU.Tx_Clock" valueReference="11" causality="input" variability="discrete" intervalVariability="constant" intervalDecimal="0.0005"/>
+        <!-- Second FMI-LS-BUS Bus Terminal on the same SimBus signal. -->
+        <Binary name="CAN_2.Rx_Data" valueReference="12" causality="input" variability="discrete" clocks="14" mimeType="application/org.fmi-standard.fmi-ls-bus.can; version=&quot;1.0.0&quot;">
+            <Start value=""/>
+        </Binary>
+        <Binary name="CAN_2.Tx_Data" valueReference="13" causality="output" variability="discrete" clocks="15" initial="calculated" mimeType="application/org.fmi-standard.fmi-ls-bus.can; version=&quot;1.0.0&quot;"/>
+        <Clock name="CAN_2.Rx_Clock" valueReference="14" causality="input" variability="discrete" intervalVariability="triggered"/>
+        <Clock name="CAN_2.Tx_Clock" valueReference="15" causality="input" variability="discrete" intervalVariability="constant" intervalDecimal="0.0005"/>
+    </ModelVariables>
+    <ModelStructure>
+        <Output valueReference="3"/>
+        <Output valueReference="5"/>
+        <Output valueReference="9"/>
+        <Output valueReference="13"/>
+    </ModelStructure>
+</fmiModelDescription>

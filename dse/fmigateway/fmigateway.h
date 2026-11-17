@@ -5,6 +5,7 @@
 #ifndef DSE_FMIGATEWAY_FMIGATEWAY_H_
 #define DSE_FMIGATEWAY_FMIGATEWAY_H_
 
+#include <libxml/xpath.h>
 #include <dse/clib/util/yaml.h>
 #include <dse/clib/collections/vector.h>
 #include <dse/modelc/gateway.h>
@@ -126,7 +127,11 @@ typedef struct FmiGateway {
         /* Storage (double*) for scalar inputs/parameters until indexed. */
         Vector scalar_storage;
     } settings;
-    bool binary_signals_reset;
+    bool   binary_signals_reset;
+    /* FMI-LS-BUS Bus Terminals (FMI 3), Vector[FmiGatewayLsBus*]. */
+    Vector lsbus;
+    /* Rx operations are on the SimBus but were not sent (gateway behind). */
+    bool   lsbus_pending;
 } FmiGateway;
 
 /* index.c */
@@ -136,6 +141,9 @@ DLL_PRIVATE void fmigateway_index_binary_signals(
     FmuInstanceData* fmu, ModelGatewayDesc* m, Vector* rx, Vector* tx);
 DLL_PRIVATE void fmigateway_index_text_encoding(FmuInstanceData* fmu,
     ModelGatewayDesc* m, Vector* encode_func, Vector* decode_func);
+
+DLL_PRIVATE const char** _signal_annotation_list(ModelInstanceSpec* mi,
+    SignalVector* sv, const char* signal, const char* name);
 
 /* parser.c */
 DLL_PRIVATE void fmigateway_parse(FmuInstanceData* fmu);
@@ -159,6 +167,16 @@ DLL_PRIVATE void fmigateway_parallelize(FmuInstanceData* fmu);
 DLL_PRIVATE void fmigateway_teardown(FmuInstanceData* fmu);
 DLL_PRIVATE void fmigateway_run_simer(FmuInstanceData* fmu);
 DLL_PRIVATE void fmigateway_stop_simer(FmuInstanceData* fmu);
+
+/* FMI-LS-BUS bridge (implemented by lsbus.c or lsbus_nop.c). */
+DLL_PRIVATE bool fmigateway_lsbus_enabled(SignalVector* sv, uint32_t index);
+DLL_PRIVATE void fmigateway_lsbus_index_clocks(
+    FmuInstanceData* fmu, struct _xmlDoc* doc);
+DLL_PRIVATE void fmigateway_lsbus_setup(
+    FmuInstanceData* fmu, ModelGatewayDesc* m);
+DLL_PRIVATE void fmigateway_lsbus_rx(FmuInstanceData* fmu);
+DLL_PRIVATE void fmigateway_lsbus_tx(FmuInstanceData* fmu, bool synced);
+DLL_PRIVATE void fmigateway_lsbus_destroy(FmuInstanceData* fmu);
 
 
 #endif  // DSE_FMIGATEWAY_FMIGATEWAY_H_

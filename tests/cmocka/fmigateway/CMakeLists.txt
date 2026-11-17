@@ -9,7 +9,7 @@ cmake_minimum_required(VERSION 3.21)
 project(test_fmigateway)
 
 
-add_library(fmigateway_runtime OBJECT
+set(FMIGATEWAY_RUNTIME_SOURCES
     ${DSE_CLIB_SOURCE_DIR}/util/ascii85.c
     ${REPO_DIR}/dse/fmigateway/fmigateway.c
     ${REPO_DIR}/dse/fmigateway/index.c
@@ -19,6 +19,10 @@ add_library(fmigateway_runtime OBJECT
     ${REPO_DIR}/dse/fmigateway/parse_fmi.c
     ${REPO_DIR}/dse/fmigateway/signal.c
     ${REPO_DIR}/dse/fmu/xml.c
+)
+add_library(fmigateway_runtime OBJECT
+    ${FMIGATEWAY_RUNTIME_SOURCES}
+    ${REPO_DIR}/dse/fmigateway/lsbus_nop.c
 )
 target_include_directories(fmigateway_runtime
     PUBLIC
@@ -34,9 +38,39 @@ target_compile_definitions(fmigateway_runtime
         PLATFORM_ARCH="${CDEF_PLATFORM_ARCH}"
 )
 target_link_libraries(fmigateway_runtime
+    PUBLIC
+        dse_external_xml2
     PRIVATE
         cmocka
+)
+
+# FMI 3 Gateway runtime, with the FMI-LS-BUS bridge.
+add_library(fmigateway_lsbus_runtime OBJECT
+    ${FMIGATEWAY_RUNTIME_SOURCES}
+    ${REPO_DIR}/dse/fmigateway/lsbus.c
+    ${REPO_DIR}/dse/fmu/fmi3clock.c
+    ${REPO_DIR}/dse/fmu/stream.c
+)
+target_include_directories(fmigateway_lsbus_runtime
+    PUBLIC
+        ${REPO_DIR}
+        ${DSE_CLIB_INCLUDE_DIR}
+        ${DSE_MODELC_INCLUDE_DIR}
+)
+target_compile_definitions(fmigateway_lsbus_runtime
+    PUBLIC
+        CMOCKA_TESTING
+    PRIVATE
+        PLATFORM_OS="${CDEF_PLATFORM_OS}"
+        PLATFORM_ARCH="${CDEF_PLATFORM_ARCH}"
+)
+target_link_libraries(fmigateway_lsbus_runtime
+    PUBLIC
+        lsbus-codec
+        $<TARGET_OBJECTS:lsbus-codec>
         dse_external_xml2
+    PRIVATE
+        cmocka
 )
 
 file(GLOB PDUNET_SOURCES CONFIGURE_DEPENDS "${DSE_MODELC_SOURCE_DIR}/model/pdunet/*.c")
@@ -146,6 +180,7 @@ add_executable(test_fmi3gateway
     fmi3/__test__.c
     fmi3/test_fmi3_xml_parsing.c
     fmi3/test_fmi3.c
+    fmi3/test_fmi3_lsbus.c
 )
 target_include_directories(test_fmi3gateway
     PUBLIC
@@ -161,7 +196,7 @@ target_compile_definitions(test_fmi3gateway
 )
 target_link_libraries(test_fmi3gateway
     PUBLIC
-        fmigateway_runtime
+        fmigateway_lsbus_runtime
         modelcgateway_runtime
         clib_runtime
     PRIVATE

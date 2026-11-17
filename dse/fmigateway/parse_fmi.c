@@ -352,6 +352,7 @@ static void fmigateway_parse_xml_config(
         _parse_xml_script_envar(fmu, ctx, cfg);
         xmlXPathFreeContext(ctx);
     }
+    fmigateway_lsbus_index_clocks(fmu, doc);
     vector_sort(&fmu->variables.scalar.input);
     // NOLINTNEXTLINE(build/include_what_you_use)
     vector_sort(&fmu->variables.string.input);

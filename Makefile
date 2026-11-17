@@ -5,7 +5,7 @@
 
 ################
 ## DSE Projects.
-export PACKAGE_ARCH ?= linux-amd64
+export PACKAGE_ARCH ?= windows-x64
 
 DSE_CLIB_REPO ?= https://github.com/boschglobal/dse.clib
 DSE_CLIB_VERSION ?= 1.1.6
@@ -154,21 +154,25 @@ fmi: build package
 		cp -r dse/build/_out/fmimodelc extra/tools/fmi/build/stage/package/linux-x86 ;\
 		cp -r dse/build/_out/fmigateway extra/tools/fmi/build/stage/package/linux-x86 ;\
 		cp -r dse/build/_out/lib extra/tools/fmi/build/stage/package/linux-x86 ;\
+		cp -r licenses -t extra/tools/fmi/build/stage ;\
 	fi
 	@if [ ${PACKAGE_ARCH} = "linux-i386" ]; then \
 		cp -r dse/build/_out/fmimodelc extra/tools/fmi/build/stage/package/linux-i386 ;\
 		cp -r dse/build/_out/fmigateway extra/tools/fmi/build/stage/package/linux-i386 ;\
 		cp -r dse/build/_out/lib extra/tools/fmi/build/stage/package/linux-i386 ;\
+		cp -r licenses -t extra/tools/fmi/build/stage ;\
 	fi
 	@if [ ${PACKAGE_ARCH} = "windows-x64" ]; then \
 		cp -r dse/build/_out/fmimodelc extra/tools/fmi/build/stage/package/windows-x64 ;\
 		cp -r dse/build/_out/fmigateway extra/tools/fmi/build/stage/package/windows-x64 ;\
 		cp -r dse/build/_out/lib extra/tools/fmi/build/stage/package/windows-x64 ;\
+		cp -r licenses -t extra/tools/fmi/build/stage ;\
 	fi
 	@if [ ${PACKAGE_ARCH} = "windows-x86" ]; then \
 		cp -r dse/build/_out/fmimodelc extra/tools/fmi/build/stage/package/windows-x86 ;\
 		cp -r dse/build/_out/fmigateway extra/tools/fmi/build/stage/package/windows-x86 ;\
 		cp -r dse/build/_out/lib extra/tools/fmi/build/stage/package/windows-x86 ;\
+		cp -r licenses -t extra/tools/fmi/build/stage ;\
 	fi
 
 .PHONY: tools
@@ -302,7 +306,7 @@ super-linter:
 		--env RUN_LOCAL=true \
 		--env DEFAULT_BRANCH=main \
 		--env IGNORE_GITIGNORED_FILES=true \
-		--env FILTER_REGEX_EXCLUDE="(doc/content/.*|extra/tools/fmi/vendor/.*)" \
+		--env FILTER_REGEX_EXCLUDE="(doc/content/.*|extra/tools/fmi/vendor/.*|dse/ncodec_lsbus/headers/.*)" \
 		--env VALIDATE_CPP=true \
 		--env VALIDATE_DOCKERFILE=true \
 		--env VALIDATE_MARKDOWN=true \

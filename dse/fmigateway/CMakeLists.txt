@@ -31,10 +31,16 @@ set(FMIGATEWAY_COMMON_FILES
 set(FMIGATEWAY_FMI2_FILES
     ${FMIGATEWAY_COMMON_FILES}
     ${REPO_DIR}/dse/fmu/fmi2fmu.c
+    lsbus_nop.c
 )
 set(FMIGATEWAY_FMI3_FILES
     ${FMIGATEWAY_COMMON_FILES}
     ${REPO_DIR}/dse/fmu/fmi3fmu.c
+    # FMI-LS-BUS bridge.
+    lsbus.c
+    ${REPO_DIR}/dse/fmu/fmi3clock.c
+    ${REPO_DIR}/dse/fmu/stream.c
+    $<TARGET_OBJECTS:lsbus-codec>
 )
 
 

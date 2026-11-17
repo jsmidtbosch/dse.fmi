@@ -11,6 +11,7 @@ uint8_t __log_level__; /* LOG_ERROR LOG_INFO LOG_DEBUG LOG_TRACE */
 
 extern int run_fmigateway__fmi3_xml_parsing_tests(void);
 extern int run_fmigateway__fmi3_tests(void);
+extern int run_fmigateway__fmi3_lsbus_tests(void);
 
 
 int main()
@@ -20,5 +21,6 @@ int main()
     int rc = 0;
     rc |= run_fmigateway__fmi3_xml_parsing_tests();
     rc |= run_fmigateway__fmi3_tests();
+    rc |= run_fmigateway__fmi3_lsbus_tests();
     return rc;
 }

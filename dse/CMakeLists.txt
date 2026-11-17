@@ -108,11 +108,14 @@ set(CLIB_SOURCE_FILES # TODO: redistribute CLib files?
     ${DSE_CLIB_SOURCE_DIR}/clib/collections/set.c
 )
 
+add_subdirectory(ncodec_lsbus)
+
 add_library(fmi2-common OBJECT
     fmu/fmi2fmu.c
     fmu/fmi2variable.c
     fmu/ncodec.c
     fmu/signal.c
+    fmu/stream.c
     ${CLIB_SOURCE_FILES}
 )
 target_include_directories(fmi2-common
@@ -125,6 +128,8 @@ target_include_directories(fmi2-common
 target_link_libraries(fmi2-common
     PUBLIC
         ab-codec
+        lsbus-codec
+        $<TARGET_OBJECTS:lsbus-codec>
     PRIVATE
         dse_external_xml2
         $<$<BOOL:${WIN32}>:bcrypt>
@@ -134,6 +139,11 @@ target_link_libraries(fmi2-common
 
 add_library(fmi3-common OBJECT
     fmu/fmi3fmu.c
+    fmu/fmi3variable.c
+    fmu/fmi3clock.c
+    fmu/ncodec.c
+    fmu/signal.c
+    fmu/stream.c
     ${CLIB_SOURCE_FILES}
 )
 target_include_directories(fmi3-common
@@ -145,7 +155,14 @@ target_include_directories(fmi3-common
 )
 target_link_libraries(fmi3-common
     PUBLIC
+        ab-codec
+        lsbus-codec
+        $<TARGET_OBJECTS:lsbus-codec>
     PRIVATE
+        dse_external_xml2
+        $<$<BOOL:${WIN32}>:bcrypt>
+        $<$<BOOL:${WIN32}>:dl>
+        m
 )
 
 

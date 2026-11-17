@@ -48,6 +48,19 @@ typedef struct BinaryData {
 } BinaryData;
 
 
+/* FMI-LS-BUS Bus Terminal (Network Abstraction). */
+typedef struct LsBusTerminal {
+    char*        name;
+    char*        mime_type;
+    bool         rx;
+    bool         tx;
+    unsigned int rx_vr;
+    unsigned int tx_vr;
+    unsigned int rx_clock_vr;
+    unsigned int tx_clock_vr;
+} LsBusTerminal;
+
+
 typedef struct modelDescription {
     char* name;
     char* version;
@@ -77,6 +90,12 @@ typedef struct modelDescription {
         BinaryData**  rx_binary_info;
         BinaryData**  tx_binary_info;
     } binary;
+    /* FMI 3: CoSimulation hasEventMode and FMI-LS-BUS Bus Terminals. */
+    bool has_event_mode;
+    struct {
+        LsBusTerminal* terminal;
+        size_t         count;
+    } lsbus;
 } modelDescription;
 
 
@@ -119,6 +138,22 @@ CsvDesc* csv_open(const char* path);
 void csv_index(CsvDesc* c, unsigned int* rx_vr, double* rx_real, size_t count);
 bool csv_read_line(CsvDesc* c);
 void csv_close(CsvDesc* c);
+
+/* lsbus.c */
+typedef struct LsBusFmi {
+    void* fmu;
+    int32_t (*get_binary)();
+    int32_t (*set_binary)();
+    int32_t (*set_clock)();
+    int32_t (*enter_event_mode)();
+    int32_t (*update_discrete_states)();
+    int32_t (*enter_step_mode)();
+} LsBusFmi;
+
+int lsbus_load(LsBusFmi* api, void* handle, void* fmu);
+int lsbus_event_mode(
+    modelDescription* desc, LsBusFmi* api, size_t step, bool enter);
+void lsbus_free(modelDescription* desc);
 
 /* init.c */
 void    init_list_parse(InitList* l, const char* arg);

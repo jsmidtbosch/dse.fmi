@@ -1,0 +1,11 @@
+---
+kind: Model
+metadata:
+  name: Gateway
+spec:
+  runtime:
+    gateway: {}
+  channels:
+    - alias: binary_vector
+      selectors:
+        channel: binary

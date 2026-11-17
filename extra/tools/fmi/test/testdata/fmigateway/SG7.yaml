@@ -1,0 +1,18 @@
+---
+kind: SignalGroup
+metadata:
+  name: lsbus_vector
+  labels:
+    channel: lsbus_vector
+  annotations:
+    vector_type: binary
+spec:
+  signals:
+    - signal: can
+      annotations:
+        mime_type: 'application/x-automotive-bus; interface=stream; type=frame; bus=can; schema=fbs; bus_id=2; node_id=3; interface_id=0'
+        # FMI variables carry FMI-LS-BUS operations (Bus Terminal "can", FMI 3).
+        dse.standards.fmi-ls-bus.enabled: true
+        dse.standards.fmi-ls-bus-topology.bus_id: 2
+        # Ignored for FMI-LS-BUS Bus Terminals.
+        dse.standards.fmi-ls-binary-to-text.encoding: ascii85

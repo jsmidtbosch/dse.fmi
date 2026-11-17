@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<fmiModelDescription fmiVersion="3.0" modelName="fmi3gateway"
+    instantiationToken="{11111111-2222-3333-8888-555555555556}"
+    description="Gateway FMU with an FMI-LS-BUS CAN Bus Terminal">
+    <CoSimulation modelIdentifier="libfmi3gateway" hasEventMode="true"
+        canHandleVariableCommunicationStepSize="true"/>
+    <DefaultExperiment startTime="0.0" stopTime="0.002" stepSize="0.0005"/>
+    <ModelVariables>
+        <Float64 name="scalar_in" valueReference="1001" causality="input" start="0.0"/>
+        <Float64 name="scalar_out" valueReference="1002" causality="output"/>
+        <Float64 name="scalar_in2" valueReference="1004" causality="input" start="0.0"/>
+        <Float64 name="scalar_out2" valueReference="1005" causality="output"/>
+        <!-- FMI-LS-BUS Bus Terminal "CAN" (SimBus signal "can"). -->
+        <Binary name="CAN.Rx_Data" valueReference="2" causality="input"
+            variability="discrete" clocks="6"
+            mimeType="application/org.fmi-standard.fmi-ls-bus.can; version=&quot;1.0.0&quot;">
+            <Start value=""/>
+        </Binary>
+        <Binary name="CAN.Tx_Data" valueReference="3" causality="output"
+            variability="discrete" clocks="7" initial="calculated"
+            mimeType="application/org.fmi-standard.fmi-ls-bus.can; version=&quot;1.0.0&quot;"/>
+        <Clock name="CAN.Rx_Clock" valueReference="6" causality="input"
+            variability="discrete" intervalVariability="triggered"/>
+        <Clock name="CAN.Tx_Clock" valueReference="7" causality="input"
+            variability="discrete" intervalVariability="constant"
+            intervalDecimal="0.0005"/>
+    </ModelVariables>
+    <ModelStructure>
+        <Output valueReference="1002"/>
+        <Output valueReference="1005"/>
+        <Output valueReference="3"/>
+        <InitialUnknown valueReference="1002"/>
+        <InitialUnknown valueReference="1005"/>
+    </ModelStructure>
+</fmiModelDescription>

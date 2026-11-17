@@ -80,7 +80,7 @@ target_include_directories(fmu3${MODULE_LC}
 )
 target_link_libraries(fmu3${MODULE_LC}
     PRIVATE
-        fmi2-common
+        fmi3-common
         ab-codec
         dse_external_xml2
         $<$<BOOL:${WIN32}>:bcrypt>

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<fmiModelDescription
+    fmiVersion="3.0"
+    modelName="lsbus"
+    description="FMI-LS-BUS CAN test FMU."
+    instantiationToken="{8e5b2c1a-6f3d-4b7e-9a0c-1d2e3f4a5b6c}">
+
+    <CoSimulation
+        modelIdentifier="lsbus"
+        hasEventMode="true"
+        canHandleVariableCommunicationStepSize="true"
+        canGetAndSetFMUState="false"
+        canSerializeFMUState="false"/>
+
+    <ModelVariables>
+        <Float64 name="counter" valueReference="1" causality="output"/>
+        <Binary name="CAN.Rx_Data" valueReference="2" causality="input"
+            variability="discrete" clocks="4"
+            mimeType="application/org.fmi-standard.fmi-ls-bus.can; version=&quot;1.0.0&quot;">
+            <Start value=""/>
+        </Binary>
+        <Binary name="CAN.Tx_Data" valueReference="3" causality="output"
+            variability="discrete" clocks="5" initial="calculated"
+            mimeType="application/org.fmi-standard.fmi-ls-bus.can; version=&quot;1.0.0&quot;"/>
+        <Clock name="CAN.Rx_Clock" valueReference="4" causality="input"
+            variability="discrete" intervalVariability="triggered"/>
+        <Clock name="CAN.Tx_Clock" valueReference="5" causality="input"
+            variability="discrete" intervalVariability="constant"
+            intervalDecimal="0.0005" shiftDecimal="0.001"/>
+    </ModelVariables>
+
+    <ModelStructure>
+        <Output valueReference="1"/>
+        <Output valueReference="3"/>
+        <InitialUnknown valueReference="1"/>
+    </ModelStructure>
+</fmiModelDescription>

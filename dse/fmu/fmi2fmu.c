@@ -548,6 +548,7 @@ fmi2Status fmi2DoStep(fmi2Component c, fmi2Real currentCommunicationPoint,
 
     /* Make sure that all binary signals were reset at some point. */
     if (fmu->variables.vtable.reset) fmu->variables.vtable.reset(fmu);
+    if (fmu->variables.vtable.reset_tx) fmu->variables.vtable.reset_tx(fmu);
     /* Marshal Signal Vectors to the VarTable. */
     for (FmuVarTableMarshalItem* mi = fmu->var_table.marshal_list;
         mi && mi->variable; mi++) {

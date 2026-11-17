@@ -19,6 +19,7 @@ add_executable(${MODULE_LC}
     csv.c
     importer.c
     init.c
+    lsbus.c
     signal_bus.c
     xml.c
     ${CLIB_SOURCE_FILES}
@@ -38,6 +39,7 @@ target_include_directories(${MODULE_LC}
 target_link_libraries(${MODULE_LC}
     PRIVATE
         ab-codec
+        lsbus-codec
         dse_external_xml2
         $<$<BOOL:${WIN32}>:bcrypt>
         $<$<BOOL:${UNIX}>:mcheck>

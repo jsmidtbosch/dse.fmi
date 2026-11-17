@@ -226,3 +226,11 @@ cleanup:
     xmlXPathFreeObject(obj);
     xmlXPathFreeContext(ctx);
 }
+
+
+/* FMI 2 has no Clocks. */
+void fmu_variable_index_clocks(xmlDoc* doc, FmuInstanceData* fmu)
+{
+    UNUSED(doc);
+    UNUSED(fmu);
+}

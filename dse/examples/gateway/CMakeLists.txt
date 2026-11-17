@@ -85,3 +85,43 @@ install(
     DESTINATION
         ${EXAMPLE_PATH}/fmi3/resources
 )
+
+
+# Example - FMI3 Gateway FMU with an FMI-LS-BUS CAN Bus Terminal
+# ==============================================================
+install(
+    TARGETS
+        ${FMI3_GW}
+    LIBRARY DESTINATION
+        ${EXAMPLE_PATH}/fmi3_lsbus/binaries/x86_64-linux
+)
+install(
+    FILES
+        fmi3_lsbus/modelDescription.xml
+    DESTINATION
+        ${EXAMPLE_PATH}/fmi3_lsbus
+)
+install(
+    DIRECTORY
+        fmi3_lsbus/terminalsAndIcons
+        fmi3_lsbus/extra
+    DESTINATION
+        ${EXAMPLE_PATH}/fmi3_lsbus
+)
+install(
+    FILES
+        data/model.yaml
+        data/stack.yaml
+        data/stack_target.yaml
+        data/signalgroup_target.yaml
+    DESTINATION
+        ${EXAMPLE_PATH}/fmi3_lsbus/resources
+)
+install(
+    FILES
+        data/fmu_lsbus.yaml
+    DESTINATION
+        ${EXAMPLE_PATH}/fmi3_lsbus/resources
+    RENAME
+        fmu.yaml
+)

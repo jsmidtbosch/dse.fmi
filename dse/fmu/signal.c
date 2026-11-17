@@ -18,6 +18,7 @@
 extern size_t fmu_variable_count(xmlDoc* doc, bool is_binary);
 extern void   fmu_variable_index(
       xmlDoc* doc, FmuInstanceData* fmu, FmuSignalVector* sv, bool is_binary);
+extern void fmu_variable_index_clocks(xmlDoc* doc, FmuInstanceData* fmu);
 extern void fmu_sv_stream_destroy(void* stream);
 
 
@@ -235,23 +236,34 @@ static FmuSignalVector* __allocate_sv(xmlDoc* doc, bool is_binary)
 }
 
 
+static void __truncate_binary(FmuSignalVectorIndex* idx)
+{
+    if (idx->sv->ncodec[idx->vi]) {
+        ncodec_truncate(idx->sv->ncodec[idx->vi]);
+    } else {
+        idx->sv->length[idx->vi] = 0;
+    }
+}
+
+
 static void fmu_default_signals_reset(FmuInstanceData* fmu)
 {
     assert(fmu);
 
     if (fmu->variables.signals_reset == false) {
-        for (FmuSignalVector* sv = fmu->data; sv && sv->signal; sv++) {
-            if (sv->binary == NULL) continue;
-            for (uint32_t i = 0; i < sv->count; i++) {
-                if (sv->ncodec[i]) {
-                    ncodec_truncate(sv->ncodec[i]);
-                } else {
-                    sv->length[i] = 0;
-                }
-            }
-        }
+        VECTOR_FOREACH(&fmu->variables.binary.rx, FmuVariable, var,
+            __truncate_binary(var->ref));
         fmu->variables.signals_reset = true;
     }
+}
+
+
+static void fmu_default_signals_reset_tx(FmuInstanceData* fmu)
+{
+    assert(fmu);
+
+    VECTOR_FOREACH(&fmu->variables.binary.tx, FmuVariable, var,
+        __truncate_binary(var->ref));
 }
 
 
@@ -285,6 +297,7 @@ static void fmu_default_signals_setup(FmuInstanceData* fmu)
     }
 
     fmu->data = sv;
+    fmu_variable_index_clocks(doc, fmu);
     xmlFreeDoc(doc);
 }
 
@@ -348,4 +361,5 @@ void fmu_load_signal_handlers(FmuInstanceData* fmu)
     fmu->variables.vtable.reset = fmu_default_signals_reset;
     fmu->variables.vtable.setup = fmu_default_signals_setup;
     fmu->variables.vtable.remove = fmu_default_signals_remove;
+    fmu->variables.vtable.reset_tx = fmu_default_signals_reset_tx;
 }

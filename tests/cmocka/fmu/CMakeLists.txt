@@ -16,6 +16,7 @@ add_library(fmi2_runtime OBJECT
     ${DSE_FMU_SOURCE_DIR}/fmi2variable.c
     ${DSE_FMU_SOURCE_DIR}/ncodec.c
     ${DSE_FMU_SOURCE_DIR}/signal.c
+    ${DSE_FMU_SOURCE_DIR}/stream.c
 )
 target_include_directories(fmi2_runtime
     PUBLIC
@@ -27,6 +28,8 @@ target_include_directories(fmi2_runtime
 target_link_libraries(fmi2_runtime
     PUBLIC
         ab-codec
+        lsbus-codec
+        $<TARGET_OBJECTS:lsbus-codec>
     PRIVATE
         dse_external_xml2
         $<$<BOOL:${WIN32}>:bcrypt>
@@ -37,8 +40,10 @@ add_library(fmi3_runtime OBJECT
     ${DSE_CLIB_SOURCE_DIR}/util/ascii85.c
     ${DSE_FMU_SOURCE_DIR}/fmi3fmu.c
     ${DSE_FMU_SOURCE_DIR}/fmi3variable.c
+    ${DSE_FMU_SOURCE_DIR}/fmi3clock.c
     ${DSE_FMU_SOURCE_DIR}/ncodec.c
     ${DSE_FMU_SOURCE_DIR}/signal.c
+    ${DSE_FMU_SOURCE_DIR}/stream.c
 )
 target_include_directories(fmi3_runtime
     PUBLIC
@@ -50,6 +55,8 @@ target_include_directories(fmi3_runtime
 target_link_libraries(fmi3_runtime
     PUBLIC
         ab-codec
+        lsbus-codec
+        $<TARGET_OBJECTS:lsbus-codec>
     PRIVATE
         dse_external_xml2
         $<$<BOOL:${WIN32}>:bcrypt>
@@ -148,4 +155,40 @@ install(
         data/modelDescription.xml
     DESTINATION
         data/test_fmu/resources
+)
+
+
+# Target - test_fmi3lsbus
+# =======================
+add_executable(test_fmi3lsbus
+    test_fmi3lsbus.c
+)
+target_compile_definitions(test_fmi3lsbus
+    PUBLIC
+        CMOCKA_TESTING
+)
+target_link_libraries(test_fmi3lsbus
+    PUBLIC
+        fmi3_runtime
+        clib_runtime
+    PRIVATE
+        ab-codec
+        dse_external_yaml
+        dse_external_xml2
+        cmocka
+        dl
+        m
+)
+install(TARGETS test_fmi3lsbus)
+install(
+    FILES
+        data/lsbus/modelDescription.xml
+    DESTINATION
+        data/test_lsbus
+)
+install(
+    FILES
+        data/lsbus/modelDescription.xml
+    DESTINATION
+        data/test_lsbus/resources
 )

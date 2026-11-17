@@ -11,7 +11,10 @@
 #include <dse/fmigateway/fmigateway.h>
 
 
-#define UNUSED(x) ((void)x)
+#define UNUSED(x)                  ((void)x)
+#define FMIGATEWAY_YAML_FILE_COUNT 4
+#define E_GATEWAY_SUCCESS          0
+#define E_GATEWAY_ENDTIME          1
 
 
 /**
@@ -52,7 +55,8 @@ FmuInstanceData* fmu_create(FmuInstanceData* fmu)
     FmiGateway* fmi_gw = calloc(1, sizeof(FmiGateway));
     *fmi_gw = (FmiGateway){
         .model = calloc(1, sizeof(ModelGatewayDesc)),
-        .settings.yaml_files = calloc(4, sizeof(char*)),
+        .settings.yaml_files =
+            calloc(FMIGATEWAY_YAML_FILE_COUNT, sizeof(char*)),
     };
     fmu->data = (void*)fmi_gw;
 
@@ -132,7 +136,7 @@ int32_t fmu_init(FmuInstanceData* fmu)
         fmi_gw->settings.end_time);
     if (rc) return rc;
 
-    fmu_log(fmu, 0, "Debug", "Connected to the Simbus...");
+    fmu_log(fmu, FmiLogOk, "Debug", "Connected to the Simbus...");
 
     fmigateway_index_scalar_signals(
         fmu, gw, &fmu->variables.scalar.input, &fmu->variables.scalar.output);
@@ -141,9 +145,12 @@ int32_t fmu_init(FmuInstanceData* fmu)
     fmigateway_index_text_encoding(fmu, gw, &fmu->variables.binary.encode_func,
         &fmu->variables.binary.decode_func);
 
+    /* Setup the LS-BUS bridge. */
+    fmigateway_lsbus_setup(fmu, gw);
+
     fmi_gw->state = FMIGATEWAY_STATE_INITIALIZED;
 
-    return 0;
+    return rc;
 }
 
 
@@ -184,10 +191,32 @@ int32_t fmu_step(
         fmi_gw->state = FMIGATEWAY_STATE_RUNNING;
     }
 
+    /* Receive signals from the LS-BUS before stepping the model. */
+    fmigateway_lsbus_rx(fmu);
+
     /* Step the model. */
     int rc = model_gw_sync(gw, communication_point);
-    if (rc == E_GATEWAYBEHIND) {
-        return 0;
+
+    /* Transmit signals to the LS-BUS after stepping the model. */
+    fmigateway_lsbus_tx(
+        fmu, rc == E_GATEWAY_SUCCESS || rc == E_GATEWAY_ENDTIME);
+
+    /* Handle the return code from the model step. */
+    switch (rc) {
+    case E_GATEWAY_SUCCESS:
+        break;
+    case E_GATEWAY_ENDTIME:
+        fmu_log(fmu, FmiLogOk, "Debug", "Gateway end_time reached (t=%f)",
+            communication_point);
+        break;
+    case E_GATEWAYBEHIND:
+        fmu_log(fmu, FmiLogError, "Error", "Gateway time behind Simbus (t=%f)",
+            communication_point);
+        return rc;
+    default:
+        fmu_log(fmu, FmiLogError, "Error", "SimBus sync failed (t=%f)",
+            communication_point);
+        return rc;
     }
 
     /* Save current step for shutdown process. */
@@ -230,6 +259,7 @@ int32_t fmu_destroy(FmuInstanceData* fmu)
     fmi_gw->state = FMIGATEWAY_STATE_TERMINATED;
 
     /* Cleanup */
+    fmigateway_lsbus_destroy(fmu);
     dse_yaml_destroy_doc_list(fmi_gw->settings.doc_list);
     for (size_t i = 0; fmi_gw->settings.yaml_files[i]; i++) {
         free((char*)fmi_gw->settings.yaml_files[i]);

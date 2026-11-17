@@ -81,7 +81,7 @@ int model_step(ModelDesc* model, double* model_time, double stop_time)
     snprintf(msg + strlen(msg), sizeof(msg), " from node_id=%s", m->node_id);
     struct NCodecCanMessage tx_msg = {
         .frame_id = ++m->counter + 1000, /* Simple frame_id: 1001, 1002 ... */
-        .frame_type = CAN_EXTENDED_FRAME,
+        .frame_type = CAN_FD_EXTENDED_FRAME, /* Payload > 8 bytes. */
         .buffer = (uint8_t*)msg,
         .len = strlen(msg) + 1, /* Capture the NULL terminator. */
     };

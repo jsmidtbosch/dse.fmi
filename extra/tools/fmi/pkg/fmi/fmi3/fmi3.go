@@ -73,6 +73,7 @@ type CoSimulation struct {
 	ProvidesAdjointDerivatives          *string `xml:"providesAdjointDerivatives,attr,omitempty"`
 	ProvidesPerElementDependencies      *string `xml:"providesPerElementDependencies,attr,omitempty"`
 	ProvidesEvaluateDiscreteStates      *string `xml:"providesEvaluateDiscreteStates,attr,omitempty"`
+	HasEventMode                        *string `xml:"hasEventMode,attr,omitempty"`
 }
 
 type LogCategories struct {
@@ -157,6 +158,17 @@ type ModelVariables struct {
 	Float64 *[]Float  `xml:"Float64,omitempty"`
 	String  *[]Binary `xml:"String,omitempty"`
 	Binary  *[]Binary `xml:"Binary,omitempty"`
+	Clock   *[]Clock  `xml:"Clock,omitempty"`
+}
+
+type Clock struct {
+	Name                string  `xml:"name,attr"`
+	ValueReference      string  `xml:"valueReference,attr"`
+	Description         string  `xml:"description,attr,omitempty"`
+	Causality           string  `xml:"causality,attr"`
+	Variability         string  `xml:"variability,attr"`
+	IntervalVariability string  `xml:"intervalVariability,attr"`
+	IntervalDecimal     *string `xml:"intervalDecimal,attr,omitempty"`
 }
 
 type ModelStructure struct {
@@ -182,9 +194,12 @@ type ModelDescription struct {
 	CoSimulation             CoSimulation      `xml:"CoSimulation"`
 	LogCategories            *LogCategories    `xml:"LogCategories,omitempty"`
 	DefaultExperiment        DefaultExperiment `xml:"DefaultExperiment"`
-	Annotations              *Annotations      `xml:"Annotations,omitempty"`
 	ModelVariables           ModelVariables    `xml:"ModelVariables"`
 	ModelStructure           ModelStructure    `xml:"ModelStructure"`
+	Annotations              *Annotations      `xml:"Annotations,omitempty"`
+
+	// FMI-LS-BUS Bus Terminal names (written to terminalsAndIcons.xml).
+	LsBusTerminals []string `xml:"-"`
 }
 
 // XML Detect & Imports
@@ -316,7 +331,7 @@ func buildBinarySignal(signal schema_kind.Signal, vref any, causality string, id
 
 	bus_id := (*signal.Annotations)["dse.standards.fmi-ls-bus-topology.bus_id"].(int)
 	mime_type := (*signal.Annotations)["mime_type"].(string)
-	encoding := (*signal.Annotations)["dse.standards.fmi-ls-binary-to-text.encoding"].(string)
+	encoding, _ := (*signal.Annotations)["dse.standards.fmi-ls-binary-to-text.encoding"].(string)
 
 	start := fmi.StartString((*signal.Annotations)["fmi_variable_start_value"])
 
@@ -335,19 +350,21 @@ func buildBinarySignal(signal schema_kind.Signal, vref any, causality string, id
 				Text: mime_type,
 			},
 		},
-		{
+	}
+	if encoding != "" {
+		annotation = append(annotation, Annotation{
 			Type: "dse.standards.fmi-ls-binary-to-text",
 			Encoding: &AnnotationField{
 				Text: encoding,
 			},
-		},
-		{
-			Type: "dse.standards.fmi-ls-bus-topology",
-			Bus_id: &AnnotationField{
-				Text: strconv.Itoa(bus_id),
-			},
-		},
+		})
 	}
+	annotation = append(annotation, Annotation{
+		Type: "dse.standards.fmi-ls-bus-topology",
+		Bus_id: &AnnotationField{
+			Text: strconv.Itoa(bus_id),
+		},
+	})
 	ann := Annotations{Annotation: annotation}
 
 	ScalarVariable := Binary{
@@ -388,6 +405,12 @@ func BinarySignal(signalGroupSpec schema_kind.SignalGroupSpec, FmiXml *ModelDesc
 		}
 		if len(rx_vref) != len(tx_vref) {
 			return errors.New("rx-tx mismatch")
+		}
+		if LsBusEnabled(signal) {
+			if err := lsBusSignal(FmiXml, signal, rx_vref, tx_vref); err != nil {
+				return err
+			}
+			continue
 		}
 		for x := 0; x < len(rx_vref); x++ {
 			*(FmiXml.ModelVariables.Binary) = append(
@@ -443,6 +466,20 @@ func StringSignal(signalGroupSpec schema_kind.SignalGroupSpec, FmiXml *ModelDesc
 	return nil
 }
 
+// FMI3 requires exactly one variable with causality="independent" (the time).
+func addIndependentTime(fmuXml *ModelDescription) {
+	if fmuXml.ModelVariables.Float64 == nil {
+		fmuXml.ModelVariables.Float64 = &[]Float{}
+	}
+	*fmuXml.ModelVariables.Float64 = append(*fmuXml.ModelVariables.Float64, Float{
+		Name:           "time",
+		ValueReference: strconv.Itoa(4294967295),
+		Causality:      "independent",
+		Variability:    stringPtr("continuous"),
+		Description:    "Simulation time",
+	})
+}
+
 func SetGeneralFmuXmlFields(fmiConfig fmi.FmiConfig, fmuXml *ModelDescription) error {
 	// Basic FMU Information.
 	fmuXml.ModelName = fmiConfig.Name
@@ -464,6 +501,8 @@ func SetGeneralFmuXmlFields(fmiConfig fmi.FmiConfig, fmuXml *ModelDescription) e
 	// Model Information.
 	fmuXml.CoSimulation.ModelIdentifier = fmiConfig.ModelIdentifier // This is the packaged SO/DLL file.
 
+	addIndependentTime(fmuXml)
+
 	// Add Annotations if provided.
 	var items []Annotation
 	for key, value := range fmiConfig.Annotations {
@@ -480,19 +519,6 @@ func VariablesFromSignalgroups(
 	FmiXml *ModelDescription, signalGroups string, index *index.YamlFileIndex) ([]string, error) {
 
 	var channels []string
-	if FmiXml.ModelVariables.Float64 == nil {
-		float := []Float{}
-		FmiXml.ModelVariables.Float64 = &float
-	}
-
-	ScalarVariable := Float{
-		Name:           "time",
-		ValueReference: strconv.Itoa(4294967295),
-		Causality:      "independent",
-		Variability:    stringPtr("continuous"),
-		Description:    "Simulation time",
-	}
-	*(FmiXml.ModelVariables.Float64) = append(*(FmiXml.ModelVariables.Float64), ScalarVariable)
 
 	if signalGroupDocs, ok := index.DocMap["SignalGroup"]; ok {
 		filter := []string{}

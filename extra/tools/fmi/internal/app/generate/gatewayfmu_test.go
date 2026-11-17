@@ -7,6 +7,7 @@ package generate
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -409,6 +410,126 @@ func TestGatewayFmu_FMI3_WithStack(t *testing.T) {
 	m := readModelYaml(t, ctx)
 	require.NotNil(t, m.Spec.Channels)
 	assert.NotEmpty(t, *m.Spec.Channels)
+}
+
+// TestGatewayFmu_FMI3_LsBus verifies that a binary signal annotated with
+// dse.standards.fmi-ls-bus.enabled produces an FMI-LS-BUS CAN Bus Terminal.
+func TestGatewayFmu_FMI3_LsBus(t *testing.T) {
+	base := gatewayTestdataPath(t)
+	ctx := runSimer(t,
+		"-fmiVersion", "3",
+		"-name", "lsbusgw",
+		"-signalgroups", sgList(base, "SG4.yaml", "SG6.yaml", "SG7.yaml"),
+	)
+
+	md := readFmi3Xml(t, ctx)
+	require.NotNil(t, md.CoSimulation.HasEventMode)
+	assert.Equal(t, "true", *md.CoSimulation.HasEventMode)
+
+	// Unique value references across all variable types.
+	vrefs := map[string]string{}
+	add := func(vr, name string) {
+		prev, dup := vrefs[vr]
+		assert.False(t, dup, "duplicate valueReference %s between %q and %q", vr, prev, name)
+		vrefs[vr] = name
+	}
+	for _, v := range *md.ModelVariables.Float64 {
+		add(v.ValueReference, v.Name)
+	}
+	for _, v := range *md.ModelVariables.String {
+		add(v.ValueReference, v.Name)
+	}
+	binary := map[string]fmi3.Binary{}
+	for _, v := range *md.ModelVariables.Binary {
+		add(v.ValueReference, v.Name)
+		binary[v.Name] = v
+	}
+	require.NotNil(t, md.ModelVariables.Clock)
+	clock := map[string]fmi3.Clock{}
+	for _, v := range *md.ModelVariables.Clock {
+		add(v.ValueReference, v.Name)
+		clock[v.Name] = v
+	}
+
+	// Bus Terminal variables.
+	rx, tx := binary["can.Rx_Data"], binary["can.Tx_Data"]
+	require.NotNil(t, rx.MimeType)
+	require.NotNil(t, tx.MimeType)
+	assert.Equal(t, fmi3.LsBusCanMimeType, *rx.MimeType)
+	assert.Equal(t, fmi3.LsBusCanMimeType, *tx.MimeType)
+	assert.Equal(t, "input", rx.Causality)
+	assert.Equal(t, "output", tx.Causality)
+	assert.Nil(t, rx.Annotations, "Bus Terminal variables are not text encoded")
+	rxClock, txClock := clock["can.Rx_Clock"], clock["can.Tx_Clock"]
+	assert.Equal(t, rxClock.ValueReference, *rx.Clocks)
+	assert.Equal(t, txClock.ValueReference, *tx.Clocks)
+	assert.Equal(t, "triggered", rxClock.IntervalVariability)
+	assert.Equal(t, "constant", txClock.IntervalVariability)
+	require.NotNil(t, txClock.IntervalDecimal)
+	assert.Equal(t, "0.0005", *txClock.IntervalDecimal)
+	// The non LS-BUS binary signal is unchanged.
+	assert.Contains(t, binary, "network_1_1_rx")
+
+	// Tx_Data is an output, but not an initial unknown (clocked).
+	outputs := map[string]bool{}
+	for _, o := range *md.ModelStructure.Output {
+		outputs[o.ValueReference] = true
+	}
+	assert.True(t, outputs[tx.ValueReference])
+	for _, u := range *md.ModelStructure.InitialUnknown {
+		assert.NotEqual(t, tx.ValueReference, u.ValueReference)
+	}
+
+	// Terminals and manifest.
+	fmuDir := filepath.Join(ctx.outdir, ctx.name)
+	terminals, err := os.ReadFile(filepath.Join(fmuDir, "terminalsAndIcons", "terminalsAndIcons.xml"))
+	require.NoError(t, err)
+	assert.Contains(t, string(terminals), `terminalKind="org.fmi-ls-bus.network-terminal" name="can" matchingRule="org.fmi-ls-bus.transceiver"`)
+	for _, member := range []string{"Rx_Clock", "Rx_Data", "Tx_Clock", "Tx_Data"} {
+		assert.Contains(t, string(terminals), `variableName="can.`+member+`" memberName="`+member+`"`)
+	}
+	manifest, err := os.ReadFile(filepath.Join(fmuDir, "extra", "org.fmi-standard.fmi-ls-bus", "fmi-ls-manifest.xml"))
+	require.NoError(t, err)
+	assert.Contains(t, string(manifest), `isBusSimulationFMU="false"`)
+
+	// fmu.yaml: topology matches the XML, no text encoding.
+	for _, sg := range readSignalGroups(t, ctx) {
+		if *sg.Metadata.Name != "lsbus_vector" {
+			continue
+		}
+		a := *sg.Spec.Signals[0].Annotations
+		assert.Equal(t, []interface{}{mustAtoi(t, rx.ValueReference)}, a["dse.standards.fmi-ls-bus-topology.rx_vref"])
+		assert.Equal(t, []interface{}{mustAtoi(t, tx.ValueReference)}, a["dse.standards.fmi-ls-bus-topology.tx_vref"])
+		assert.NotContains(t, a, "dse.standards.fmi-ls-binary-to-text.encoding")
+		assert.NotContains(t, a, "dse.standards.fmi-ls-binary-to-text.vref")
+	}
+}
+
+// TestGatewayFmu_FMI2_LsBusIgnored verifies that FMI 2 keeps the NCodec stream.
+func TestGatewayFmu_FMI2_LsBusIgnored(t *testing.T) {
+	base := gatewayTestdataPath(t)
+	ctx := runSimer(t,
+		"-fmiVersion", "2",
+		"-name", "lsbusgw2",
+		"-signalgroups", sgList(base, "SG6.yaml", "SG7.yaml"),
+	)
+
+	md := readFmi2Xml(t, ctx)
+	vrefs := map[string]string{}
+	for _, v := range md.ModelVariables.ScalarVariable {
+		prev, dup := vrefs[v.ValueReference]
+		assert.False(t, dup, "duplicate valueReference %s between %q and %q", v.ValueReference, prev, v.Name)
+		vrefs[v.ValueReference] = v.Name
+	}
+	_, err := os.Stat(filepath.Join(ctx.outdir, ctx.name, "terminalsAndIcons"))
+	assert.True(t, os.IsNotExist(err))
+}
+
+func mustAtoi(t *testing.T, s string) int {
+	t.Helper()
+	v, err := strconv.Atoi(s)
+	require.NoError(t, err)
+	return v
 }
 
 // TestGatewayFmu_FMI2_ModelChannels verifies that the model.yaml channels

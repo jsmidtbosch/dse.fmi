@@ -117,6 +117,8 @@ target_link_libraries(clib_runtime
 
 # Targets
 # =======
+add_subdirectory(${REPO_DIR}/dse/ncodec_lsbus lsbus_codec)
+add_subdirectory(ncodec_lsbus)
 add_subdirectory(fmu)
 add_subdirectory(fmimcl)
 add_subdirectory(fmimodelc)

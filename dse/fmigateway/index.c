@@ -66,8 +66,8 @@ static int _signal_group_match_handler(
 }
 
 
-static const char** _signal_annotation_list(ModelInstanceSpec* mi,
-    SignalVector* sv, const char* signal, const char* name)
+const char** _signal_annotation_list(ModelInstanceSpec* mi, SignalVector* sv,
+    const char* signal, const char* name)
 {
     /* Set the search vars. */
     __signal_match = NULL;
@@ -229,11 +229,15 @@ void fmigateway_index_text_encoding(FmuInstanceData* fmu, ModelGatewayDesc* m,
                 const char* _ =
                     signal_annotation(sv, i, "fmi_variable_vref", NULL);
                 if (_ == NULL) continue;
+                /* LS-BUS operations are binary, never text encoded. */
+                if (fmigateway_lsbus_enabled(sv, i)) continue;
 
                 /* Encoding. */
                 const char* encoding = signal_annotation(sv, i,
                     "dse.standards.fmi-ls-binary-to-text.encoding", NULL);
-                if (strcmp(encoding, "ascii85") != 0) continue;
+                if (encoding == NULL || strcmp(encoding, "ascii85") != 0) {
+                    continue;
+                }
 
                 /* Index, all with same encoding (for now). */
                 // dse.standards.fmi-ls-binary-to-text.vref: [[2,3,4,5,6,7,8,9]

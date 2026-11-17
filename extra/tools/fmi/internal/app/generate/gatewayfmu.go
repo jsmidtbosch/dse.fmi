@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/boschglobal/dse.clib/extra/go/command/log"
@@ -200,8 +201,20 @@ func (c *GenFmiGatewayCommand) Run() error {
 	if err := writeXml(fmuXml, fmuModelDescriptionFilename); err != nil {
 		return fmt.Errorf("could not generate the FMU Model Description (%v)", err)
 	}
+	if err := writeLsBusArtifacts(fmuXml, c.outdir); err != nil {
+		return fmt.Errorf("could not generate the FMI-LS-BUS artifacts (%v)", err)
+	}
 
 	return nil
+}
+
+// writeLsBusArtifacts writes the FMI-LS-BUS terminals and manifest (FMI 3 only).
+func writeLsBusArtifacts(fmuXml interface{}, dir string) error {
+	md, ok := fmuXml.(fmi3.ModelDescription)
+	if !ok {
+		return nil
+	}
+	return fmi3.WriteLsBusArtifacts(dir, md.LsBusTerminals)
 }
 
 func (c *GenFmiGatewayCommand) buildFmuPackage(fmuXml interface{}) error {
@@ -274,6 +287,9 @@ func (c *GenFmiGatewayCommand) buildFmuPackage(fmuXml interface{}) error {
 	if err := writeXml(fmuXml, fmuModelDescriptionFilename); err != nil {
 		return fmt.Errorf("could not generate the FMU Model Description (%v)", err)
 	}
+	if err := writeLsBusArtifacts(fmuXml, fmuOutDir); err != nil {
+		return fmt.Errorf("could not generate the FMI-LS-BUS artifacts (%v)", err)
+	}
 
 	// Produce the FMU.
 	fmuFilename := filepath.Join(c.outdir, c.name) + ".fmu"
@@ -335,9 +351,23 @@ func (c *GenFmiGatewayCommand) patchSignal(vr *int, sgType string, signals []sch
 			(*s.Annotations)["fmi_variable_vref"] = *vr
 			(*s.Annotations)["fmi_variable_vref_input"] = *vr
 			(*s.Annotations)["fmi_variable_vref_output"] = *vr + 1
-			(*s.Annotations)["dse.standards.fmi-ls-binary-to-text.vref"] = []int{*vr, *vr + 1}
 			(*s.Annotations)["dse.standards.fmi-ls-bus-topology.rx_vref"] = []int{*vr}
 			(*s.Annotations)["dse.standards.fmi-ls-bus-topology.tx_vref"] = []int{*vr + 1}
+			if fmi3.LsBusEnabled(s) && c.fmiVersion == "3" {
+				// Bus Terminal: LS-BUS operations are binary (no text encoding).
+				delete(*s.Annotations, "dse.standards.fmi-ls-binary-to-text.encoding")
+				delete(*s.Annotations, "dse.standards.fmi-ls-binary-to-text.vref")
+				(*s.Annotations)[fmi3.LsBusRxClockAnnotation] = []int{*vr + 2}
+				(*s.Annotations)[fmi3.LsBusTxClockAnnotation] = []int{*vr + 3}
+				(*s.Annotations)[fmi3.LsBusTxClockIntervalAnnotation] = strconv.FormatFloat(c.stepSize, 'g', -1, 64)
+				*vr += 4
+			} else {
+				if fmi3.LsBusEnabled(s) {
+					slog.Warn("FMI-LS-BUS requires FMI 3, using the NCodec stream", "signal", s.Signal)
+				}
+				(*s.Annotations)["dse.standards.fmi-ls-binary-to-text.vref"] = []int{*vr, *vr + 1}
+				*vr += 2
+			}
 			signalList = append(signalList, s)
 			*vr += 2
 		}

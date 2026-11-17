@@ -1,0 +1,39 @@
+---
+kind: SignalGroup
+metadata:
+  name: binary_vector
+  labels:
+    channel: binary
+    type: binary
+  annotations:
+    vector_type: binary
+spec:
+  signals:
+    - signal: can
+      annotations:
+        mime_type: 'application/x-automotive-bus; interface=stream; type=frame; bus=can; schema=fbs; bus_id=1; node_id=2; interface_id=0'
+        fmi_variable_vref: 2
+        # FMI variables carry FMI-LS-BUS operations (default: NCodec stream).
+        dse.standards.fmi-ls-bus.enabled: true
+        dse.standards.fmi-ls-bus-topology.bus_id: 1
+        # Two Bus Terminals on one SimBus signal.
+        dse.standards.fmi-ls-bus-topology.rx_vref: [2, 12]
+        dse.standards.fmi-ls-bus-topology.tx_vref: [3, 13]
+        # Ignored for LS-BUS Bus Terminals (operations are binary).
+        dse.standards.fmi-ls-binary-to-text.encoding: ascii85
+        dse.standards.fmi-ls-binary-to-text.vref: [2, 3, 12, 13]
+    - signal: can_stream
+      annotations:
+        mime_type: 'application/x-automotive-bus; interface=stream; type=frame; bus=can; schema=fbs; bus_id=2; node_id=2; interface_id=0'
+        fmi_variable_vref: 4
+        dse.standards.fmi-ls-bus-topology.bus_id: 2
+        dse.standards.fmi-ls-bus-topology.rx_vref: [4]
+        dse.standards.fmi-ls-bus-topology.tx_vref: [5]
+    - signal: can_pdu
+      annotations:
+        mime_type: 'application/x-automotive-bus; interface=stream; type=pdu; model=can; schema=fbs; ecu_id=7; swc_id=78'
+        fmi_variable_vref: 8
+        dse.standards.fmi-ls-bus.enabled: true
+        dse.standards.fmi-ls-bus-topology.bus_id: 3
+        dse.standards.fmi-ls-bus-topology.rx_vref: [8]
+        dse.standards.fmi-ls-bus-topology.tx_vref: [9]

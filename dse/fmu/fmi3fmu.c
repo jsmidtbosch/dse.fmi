@@ -127,7 +127,6 @@ fmi3Instance fmi3InstantiateCoSimulation(fmi3String instanceName,
     fmi3IntermediateUpdateCallback intermediateUpdate)
 {
     UNUSED(visible);
-    UNUSED(eventModeUsed);
     UNUSED(earlyReturnAllowed);
     UNUSED(requiredIntermediateVariables);
     UNUSED(nRequiredIntermediateVariables);
@@ -139,6 +138,7 @@ fmi3Instance fmi3InstantiateCoSimulation(fmi3String instanceName,
     fmu->instance.resource_location = strdup(resourcePath);
     fmu->instance.guid = strdup(instantiationToken);
     fmu->instance.log_enabled = loggingOn;
+    fmu->instance.event_mode_used = eventModeUsed;
     fmu->instance.version = 3;
     fmu->instance.environment = instanceEnvironment;
 
@@ -178,6 +178,7 @@ fmi3Instance fmi3InstantiateCoSimulation(fmi3String instanceName,
     fmu->variables.binary.tx = fmu_variable_index_make();
     fmu->variables.binary.encode_func = fmu_variable_index_make();
     fmu->variables.binary.decode_func = fmu_variable_index_make();
+    fmu->variables.clock = fmu_variable_index_make();
 
     /* Setup signal indexing. */
     fmu_load_signal_handlers(fmu);
@@ -256,6 +257,7 @@ void fmi3FreeInstance(fmi3Instance instance)
     fmu_variable_index_destroy(&fmu->variables.binary.tx);
     vector_reset(&fmu->variables.binary.encode_func);
     vector_reset(&fmu->variables.binary.decode_func);
+    fmu_variable_index_destroy(&fmu->variables.clock);
     VECTOR_FOREACH(&fmu->variables.binary.free_list, void*, p, free(*p));
     vector_reset(&fmu->variables.binary.free_list);
 
@@ -287,6 +289,11 @@ fmi3Status fmi3ExitInitializationMode(fmi3Instance instance)
     assert(instance);
     FmuInstanceData* fmu = (FmuInstanceData*)instance;
 
+    if (vector_len(&fmu->variables.clock) && !fmu->instance.event_mode_used) {
+        fmu_log(fmu, fmi3Warning, "Warning",
+            "FMU has Clocks but eventModeUsed=false (FMI 3.0 2.3.1), clocked "
+            "variables are exchanged around fmi3DoStep");
+    }
     int32_t rc = fmu_init(fmu);
     return (rc == 0 ? fmi3OK : fmi3Error);
 }
@@ -519,6 +526,7 @@ fmi3Status fmi3GetBinary(fmi3Instance instance,
     for (size_t i = 0; i < nValueReferences; i++) {
         /* Initial value condition is a NULL string. */
         values[i] = NULL;
+        valueSizes[i] = 0;
 
         /* Lookup the binary signal, by VRef. */
         FmuSignalVectorIndex* idx =
@@ -535,14 +543,14 @@ fmi3Status fmi3GetBinary(fmi3Instance instance,
             &fmu->variables.binary.encode_func, valueReferences[i]);
         if (ef) {
             values[i] = (fmi3Binary)ef((char*)data, data_len);
+            valueSizes[i] = strlen((char*)values[i]);
+            /* Save reference for later free. */
+            vector_push(&fmu->variables.binary.free_list, &values[i]);
         } else {
-            values[i] = malloc(data_len);
-            memcpy((void*)values[i], data, data_len);
+            /* FMI 3.0.1 2.2.7.2: valid until the next FMU call, no copy. */
+            values[i] = data;
+            valueSizes[i] = data_len;
         }
-        valueSizes[i] = data_len;
-
-        /* Save reference for later free. */
-        vector_push(&fmu->variables.binary.free_list, &values[i]);
     }
 
     return fmi3OK;
@@ -554,8 +562,11 @@ fmi3Status fmi3GetClock(fmi3Instance instance,
 {
     assert(instance);
     UNUSED(valueReferences);
-    UNUSED(nValueReferences);
-    UNUSED(values);
+
+    /* No output clocks (Tx_Clock is an input clock). */
+    for (size_t i = 0; i < nValueReferences; i++) {
+        values[i] = fmi3ClockInactive;
+    }
 
     return fmi3OK;
 }
@@ -769,15 +780,16 @@ fmi3Status fmi3SetBinary(fmi3Instance instance,
 
         /* Get the input binary string, decode if configured. */
         fmi3Binary data = values[i];
+        size_t     len = valueSizes[i];
         DecodeFunc df = fmu_variable_find(
             &fmu->variables.binary.decode_func, valueReferences[i]);
         if (df) {
-            data = (fmi3Binary)df((char*)data, (size_t*)&valueSizes[i]);
+            data = (fmi3Binary)df((char*)data, &len);
         }
 
         /* Append the binary string to the Binary Signal. */
         dse_buffer_append(&idx->sv->binary[idx->vi], &idx->sv->length[idx->vi],
-            &idx->sv->buffer_size[idx->vi], (void*)data, valueSizes[i]);
+            &idx->sv->buffer_size[idx->vi], (void*)data, len);
 
         /* Release the decode string/memory. Caller owns value[]. */
         if (data != values[i]) free((uint8_t*)data);
@@ -944,10 +956,19 @@ fmi3Status fmi3GetIntervalDecimal(fmi3Instance instance,
     fmi3Float64 intervals[], fmi3IntervalQualifier qualifiers[])
 {
     assert(instance);
-    UNUSED(valueReferences);
-    UNUSED(nValueReferences);
-    UNUSED(intervals);
-    UNUSED(qualifiers);
+    FmuInstanceData* fmu = (FmuInstanceData*)instance;
+
+    for (size_t i = 0; i < nValueReferences; i++) {
+        FmuClock* clock =
+            fmu_variable_find(&fmu->variables.clock, valueReferences[i]);
+        if (clock == NULL) {
+            fmu_log(fmu, fmi3Error, "Error", "No interval for Clock (vr=%u)",
+                valueReferences[i]);
+            return fmi3Error;
+        }
+        intervals[i] = clock->interval;
+        qualifiers[i] = fmi3IntervalUnchanged;
+    }
 
     return fmi3OK;
 }
@@ -972,9 +993,18 @@ fmi3Status fmi3GetShiftDecimal(fmi3Instance instance,
     fmi3Float64 shifts[])
 {
     assert(instance);
-    UNUSED(valueReferences);
-    UNUSED(nValueReferences);
-    UNUSED(shifts);
+    FmuInstanceData* fmu = (FmuInstanceData*)instance;
+
+    for (size_t i = 0; i < nValueReferences; i++) {
+        FmuClock* clock =
+            fmu_variable_find(&fmu->variables.clock, valueReferences[i]);
+        if (clock == NULL) {
+            fmu_log(fmu, fmi3Error, "Error", "No shift for Clock (vr=%u)",
+                valueReferences[i]);
+            return fmi3Error;
+        }
+        shifts[i] = clock->shift;
+    }
 
     return fmi3OK;
 }
@@ -1056,12 +1086,13 @@ fmi3Status fmi3UpdateDiscreteStates(fmi3Instance instance,
     fmi3Boolean* nextEventTimeDefined, fmi3Float64* nextEventTime)
 {
     assert(instance);
-    UNUSED(discreteStatesNeedUpdate);
-    UNUSED(terminateSimulation);
-    UNUSED(nominalsOfContinuousStatesChanged);
-    UNUSED(valuesOfContinuousStatesChanged);
-    UNUSED(nextEventTimeDefined);
     UNUSED(nextEventTime);
+
+    *discreteStatesNeedUpdate = fmi3False;
+    *terminateSimulation = fmi3False;
+    *nominalsOfContinuousStatesChanged = fmi3False;
+    *valuesOfContinuousStatesChanged = fmi3False;
+    *nextEventTimeDefined = fmi3False;
 
     return fmi3OK;
 }
@@ -1195,10 +1226,6 @@ fmi3Status fmi3DoStep(fmi3Instance instance,
     fmi3Boolean* earlyReturn, fmi3Float64* lastSuccessfulTime)
 {
     UNUSED(noSetFMUStatePriorToCurrentPoint);
-    UNUSED(eventHandlingNeeded);
-    UNUSED(terminateSimulation);
-    UNUSED(earlyReturn);
-    UNUSED(lastSuccessfulTime);
 
     assert(instance);
     FmuInstanceData* fmu = (FmuInstanceData*)instance;
@@ -1206,6 +1233,8 @@ fmi3Status fmi3DoStep(fmi3Instance instance,
 
     /* Make sure that all binary signals were reset at some point. */
     if (fmu->variables.vtable.reset) fmu->variables.vtable.reset(fmu);
+    /* Tx was read by the importer (after the previous step), now reset. */
+    if (fmu->variables.vtable.reset_tx) fmu->variables.vtable.reset_tx(fmu);
     /* Marshal Signal Vectors to the VarTable. */
     for (FmuVarTableMarshalItem* mi = fmu->var_table.marshal_list;
         mi && mi->variable; mi++) {
@@ -1223,6 +1252,11 @@ fmi3Status fmi3DoStep(fmi3Instance instance,
     }
     /* Reset the binary signal reset mechanism. */
     fmu->variables.signals_reset = false;
+
+    *eventHandlingNeeded = fmi3False;
+    *terminateSimulation = fmi3False;
+    *earlyReturn = fmi3False;
+    *lastSuccessfulTime = currentCommunicationPoint + communicationStepSize;
 
     /* return final status. */
     return (rc == 0 ? fmi3OK : fmi3Error);
